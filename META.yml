@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Geo-Coder-Bing-Bulk
-version:            0.02
+version:            0.03
 abstract:           Geocode addresses in bulk with the Bing Spatial
 author:
     - gray <gray@cpan.org>
@@ -27,5 +27,4 @@ meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
     version:  1.4
 recommends:
-    Crypt::SSLeay:  0
-    JSON::XS:       2
+    JSON::XS:  2

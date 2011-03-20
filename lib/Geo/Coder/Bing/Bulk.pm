@@ -10,7 +10,7 @@ use JSON;
 use LWP::UserAgent;
 use URI;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 $VERSION = eval $VERSION;
 
 sub new {
@@ -33,10 +33,9 @@ sub new {
         $self->ua->set_my_handler(request_send  => $dump_sub);
         $self->ua->set_my_handler(response_done => $dump_sub);
     }
-
-    $self->{compress} = 1 unless exists $self->{compress};
-    $self->ua->default_header(accept_encoding => 'gzip,deflate')
-        if $self->{compress};
+    elsif ($self->{compress}) {
+        $self->ua->default_header(accept_encoding => 'gzip,deflate');
+    }
 
     if ($self->{https} and not $self->ua->is_protocol_supported('https')) {
         croak q('https' requires Crypt::SSLeay or IO::Socket::SSL)
@@ -78,9 +77,11 @@ sub upload {
         $uri, content_type => 'text/plain',
     );
 
+    my $id = 0;
     for my $loc (@$locs) {
-        (my $str = $loc) =~ s/[|\n]/ /g;
-        $req->add_content_utf8("||$str\n");
+        (my $str = $loc) =~ tr/|\n\r/ /s;
+        $req->add_content_utf8("$id||$str\n");
+        $id++;
     }
     # Prevents LWP warning about wrong content length.
     $req->content_length(length(${$req->content_ref}));
@@ -114,7 +115,7 @@ sub _status {
     return unless $self->{content} or $self->{id};
 
     my $uri = URI->new(
-        'http://spatial.virtualearth.net/REST/v1/dataflows/Geocode/' .
+        'http://spatial.virtualearth.net/REST/v1/Dataflows/Geocode/' .
         $self->{id}
     );
     $uri->scheme('https') if $self->{https};
@@ -154,7 +155,7 @@ sub _download {
     return unless $self->{$type};
 
     my $uri = URI->new(
-        'http://spatial.virtualearth.net/REST/v1/dataflows/Geocode/' .
+        'http://spatial.virtualearth.net/REST/v1/Dataflows/Geocode/' .
         $self->{id} . '/output/' . $type
     );
     $uri->scheme('https') if $self->{https};
@@ -175,6 +176,7 @@ sub _download {
 # to the data schema described here [1].
 # [1] http://msdn.microsoft.com/en-us/library/ff701736.aspx
 my %field_mapping = (
+    0  => 'Id',
     2  => 'Query',
     12 => [ Address => 'AddressLine' ],
     13 => [ Address => 'AdminDistrict' ],
@@ -199,7 +201,7 @@ sub _parse_output {
     my ($self, $ref) = @_;
 
     my @data;
-    while ($$ref =~ /^(.*)$/gm) {
+    while ($$ref =~ /([^\n\r]+)/g) {
         my @fields = split '\|', $1, 31;
         my $data = {};
         for my $i (keys %field_mapping) {
@@ -265,17 +267,18 @@ Accepts an optional B<https> parameter for securing network traffic.
 Accepts an optional B<ua> parameter for passing in a custom LWP::UserAgent
 object.
 
-Accepts an optional 'id' parameter from a previous call to L</upload>.
+Accepts an optional B<id> parameter from a previous call to L</upload>.
 
 =head2 upload
 
     $id = $bulk->upload(\@locations)
 
-Submits a single bulk query for all the given locations strings and returns
+Submits a single bulk query for all the given location strings and returns
 the assigned job id.
 
-Note that queries are limited to 100MB and there is a limit of 10 concurrent
-bulk jobs.
+Note that query size is limited to 300 MB (uncompressed) and 200,000
+locations; there is a limit of 10 concurrent bulk jobs and 50 jobs per 24
+hours.
 
 =head2 is_pending
 
@@ -304,6 +307,7 @@ were results. A typical result looks like:
         DisplayName =>
             "W Sunset Blvd & Los Liones Dr, Pacific Palisades, CA 90272",
         EntityType => "RoadIntersection",
+        Id         => 0,
         InterpolatedLocation =>
             { Latitude => "34.04185", Longitude => "-118.554" },
         Query      => "Sunset Blvd and Los Liones Dr, Pacific Palisades, CA",
@@ -318,7 +322,7 @@ were results. A typical result looks like:
 Returns an array reference if there were query failures.
 
 Note that Bing will report invalid addresses as successfully geocoded even
-thought it could not determine its location. Failures appear to only concern
+though it could not determine its location. Failures appear to only concern
 query construction- ex. missing fields, etc. So this is likely not going to
 affect users of this module- until advanced locations (hashrefs of fields)
 are permitted.
@@ -378,13 +382,13 @@ L<http://rt.cpan.org/Public/Dist/Display.html?Name=Geo-Coder-Bing-Bulk>
 
 =item * Search CPAN
 
-L<http://search.cpan.org/dist/Geo-Coder-Bing-Bulk>
+L<http://search.cpan.org/dist/Geo-Coder-Bing-Bulk/>
 
 =back
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2010 gray <gray at cpan.org>, all rights reserved.
+Copyright (C) 2010-2011 gray <gray at cpan.org>, all rights reserved.
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
