@@ -10,7 +10,7 @@ use JSON;
 use LWP::UserAgent;
 use URI;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 $VERSION = eval $VERSION;
 
 sub new {
@@ -21,25 +21,21 @@ sub new {
 
     my $self = bless \ %params, $class;
 
-    if ($params{ua}) {
-        $self->ua($params{ua});
-    }
-    else {
-        $self->{ua} = LWP::UserAgent->new(agent => "$class/$VERSION");
-    }
+    $self->ua(
+        $params{ua} || LWP::UserAgent->new(agent => "$class/$VERSION")
+    );
 
     if ($self->{debug}) {
         my $dump_sub = sub { $_[0]->dump(maxlength => 0); return };
         $self->ua->set_my_handler(request_send  => $dump_sub);
         $self->ua->set_my_handler(response_done => $dump_sub);
     }
-    elsif ($self->{compress}) {
+    elsif (exists $self->{compress} ? $self->{compress} : 1) {
         $self->ua->default_header(accept_encoding => 'gzip,deflate');
     }
 
-    if ($self->{https} and not $self->ua->is_protocol_supported('https')) {
-        croak q('https' requires Crypt::SSLeay or IO::Socket::SSL)
-    }
+    croak q('https' requires LWP::Protocol::https)
+        if $self->{https} and not $self->ua->is_protocol_supported('https');
 
     $self->{status}  = '';
 
